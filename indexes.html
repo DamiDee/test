@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Background Test</title>
+</head>
+<body>
+
+<h1>Background Activity Test</h1>
+
+<p>Status: <span id="status">Starting...</span></p>
+<p>Ping Count: <span id="count">0</span></p>
+
+<div id="logs"></div>
+
+<script>
+const endpoint =
+  "https://running-hill-pumps-tommy.trycloudflare.com/ping";
+
+let count = 0;
+
+async function pingServer() {
+  const time = new Date().toLocaleTimeString();
+
+  try {
+    const response = await fetch(endpoint);
+    const data = await response.text();
+
+    count++;
+
+    document.getElementById("count").textContent = count;
+    document.getElementById("status").textContent =
+      "Last ping successful: " + time;
+
+    document.getElementById("logs").innerHTML += `
+      <p>✅ ${time} — ${data}</p>
+    `;
+
+    console.log("PING:", time, data);
+
+  } catch (error) {
+
+    document.getElementById("status").textContent =
+      "Ping failed: " + time;
+
+    document.getElementById("logs").innerHTML += `
+      <p>❌ ${time} — ${error.message}</p>
+    `;
+
+    console.error(error);
+  }
+}
+
+pingServer();
+
+setInterval(pingServer, 5000);
+</script>
+
+</body>
+</html>
