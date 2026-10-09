@@ -1,57 +1,158 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Background Test</title>
+  <title>Background Test with PiP</title>
+  <style>
+    /* Styling for the UI container */
+    #tracker-ui {
+      margin: 20px 0;
+      padding: 15px;
+      border: 1px solid #ccc;
+      background: #f9f9f9;
+      max-width: 400px;
+    }
+    button {
+      padding: 10px 15px;
+      font-size: 16px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:disabled {
+      background-color: #cccccc;
+    }
+    /* Hide the canvas and video stream elements from the main page view */
+    #hidden-canvas, #hidden-video {
+      display: none;
+    }
+  </style>
 </head>
 <body>
 
 <h1>Background Activity Test</h1>
 
-<p>Status: <span id="status">Starting...</span></p>
-<p>Ping Count: <span id="count">0</span></p>
+<!-- PiP Trigger Button (Required by mobile browsers to be a direct user action) -->
+<button id="pip-btn">Start Floating Tracker</button>
+
+<div id="tracker-ui">
+  <h3>Live Tracking Interface</h3>
+  <p>Status: <span id="status">Starting...</span></p>
+  <p>Ping Count: <span id="count">0</span></p>
+</div>
 
 <div id="logs"></div>
 
-<script>
-const endpoint =
-  "https://running-hill-pumps-tommy.trycloudflare.com/ping";
+<!-- Hidden drawing pipeline elements -->
+<canvas id="hidden-canvas" width="400" height="250"></canvas>
+<video id="hidden-video" muted playsinline></video>
 
+<script>
+const endpoint = "https://running-hill-pumps-tommy.trycloudflare.com/ping";
 let count = 0;
+let lastPingTime = "Never";
+let lastPingData = "No data";
+let lastStatus = "Initializing...";
+
+// Canvas and Video elements setup
+const canvas = document.getElementById("hidden-canvas");
+const ctx = canvas.getContext("2d");
+const video = document.getElementById("hidden-video");
+const pipBtn = document.getElementById("pip-btn");
+
+// Draw a visual layout directly on the canvas to represent our UI inside the PiP bubble
+function drawToCanvas() {
+  // Clear canvas background
+  ctx.fillStyle = "#121212"; // dark background for high visibility
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Draw header text
+  ctx.fillStyle = "#00ffcc";
+  ctx.font = "bold 20px Arial";
+  ctx.fillText("🚖 Live Driver Tracker", 20, 40);
+
+  // Draw current ping count
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "16px Arial";
+  ctx.fillText(`Total Pings: ${count}`, 20, 80);
+
+  // Draw status update
+  ctx.fillText(`Status: ${lastStatus}`, 20, 120);
+
+  // Draw last network payload data (simulating driver location metadata)
+  ctx.fillStyle = "#aaaaaa";
+  ctx.font = "italic 14px Arial";
+  ctx.fillText(`Server Data: ${lastPingData}`, 20, 170);
+  ctx.fillText(`Updated At: ${lastPingTime}`, 20, 200);
+}
+
+// Initial draw sequence
+drawToCanvas();
 
 async function pingServer() {
   const time = new Date().toLocaleTimeString();
+  lastPingTime = time;
 
   try {
     const response = await fetch(endpoint);
     const data = await response.text();
 
     count++;
+    lastStatus = "Ping Successful";
+    lastPingData = data;
 
+    // Update normal webpage UI elements
     document.getElementById("count").textContent = count;
-    document.getElementById("status").textContent =
-      "Last ping successful: " + time;
-
-    document.getElementById("logs").innerHTML += `
-      <p>✅ ${time} — ${data}</p>
-    `;
-
+    document.getElementById("status").textContent = "Last ping successful: " + time;
+    document.getElementById("logs").innerHTML += `<p>✅ ${time} — ${data}</p>`;
     console.log("PING:", time, data);
 
   } catch (error) {
+    lastStatus = "Ping Failed";
+    lastPingData = error.message;
 
-    document.getElementById("status").textContent =
-      "Ping failed: " + time;
-
-    document.getElementById("logs").innerHTML += `
-      <p>❌ ${time} — ${error.message}</p>
-    `;
-
+    // Update webpage UI elements for failure states
+    document.getElementById("status").textContent = "Ping failed: " + time;
+    document.getElementById("logs").innerHTML += `<p>❌ ${time} — ${error.message}</p>`;
     console.error(error);
   }
+
+  // Instantly push the updated details to the canvas layout frame
+  drawToCanvas();
 }
 
-pingServer();
+// Set up video capture stream pipeline from canvas frame target at 5 frames per second
+const stream = canvas.captureStream(5);
+video.srcObject = stream;
+video.play();
 
+// Event click listener executing the critical required browser gesture interface hook
+pipBtn.addEventListener("click", async () => {
+  try {
+    if (document.pictureInPictureElement) {
+      await document.exitPictureInPicture();
+      pipBtn.textContent = "Start Floating Tracker";
+    } else {
+      pipBtn.disabled = true;
+      await video.requestPictureInPicture();
+      pipBtn.disabled = false;
+      pipBtn.textContent = "Stop Floating Tracker";
+    }
+  } catch (error) {
+    console.error("Failed to initialize Picture-in-Picture window mode:", error);
+    pipBtn.disabled = false;
+    alert("PiP is not supported or was blocked on this connection/device.");
+  }
+});
+
+// Sync status changes if user dismisses the bubble manually from the OS close cross icon
+video.addEventListener('leavepictureinpicture', () => {
+  pipBtn.textContent = "Start Floating Tracker";
+});
+
+// Run network update tasks loop natively
+pingServer();
 setInterval(pingServer, 5000);
 </script>
 
